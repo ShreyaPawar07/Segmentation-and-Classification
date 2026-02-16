@@ -1,0 +1,96 @@
+Segmentation - Problem Summary
+=======================================================
+
+Objective:
+----------
+Classify enterprise tickets into topic categories using NLP and
+machine learning. The goal is to automatically route tickets to the correct
+department (e.g., HR Support, Hardware, Access, etc.) based on the ticket text.
+
+Dataset:
+--------
+- Source: all_tickets_processed_improved_v3.csv
+- Total samples: 956 IT service tickets
+- Target column: Topic_group (8 categories)
+- Feature column: Document (ticket text)
+
+Class Distribution (imbalanced):
+  - HR Support:              231
+  - Hardware:                177
+  - Access:                  175
+  - Miscellaneous:           159
+  - Purchase:                 95
+  - Storage:                  57
+  - Internal Project:         48
+  - Administrative rights:    14
+
+Text Preprocessing Pipeline:
+----------------------------
+1. Lowercasing and punctuation removal
+2. Stopword removal (NLTK English stopwords)
+3. Spelling correction using SymSpell (max edit distance = 2)
+4. Lemmatization using WordNet Lemmatizer
+
+Feature Engineering:
+--------------------
+- TF-IDF Vectorization (via sklearn TfidfVectorizer, integrated into pipeline)
+- Label Encoding of target categories (via sklearn LabelEncoder)
+- Computed balanced class weights to handle class imbalance
+
+Train/Test Split:
+-----------------
+- 70% training, 30% testing
+- Stratified split (preserves class proportions)
+- Random state: 101
+
+Models Trained & Evaluated:
+---------------------------
+Each model was wrapped in a sklearn Pipeline with TfidfVectorizer + Classifier.
+
+1. Logistic Regression (with balanced class weights)
+2. Decision Tree Classifier (with balanced class weights)
+3. XGBoost Classifier (XGBClassifier)
+4. Linear SVC with Calibrated Classifier CV (sigmoid method, balanced class weights)
+
+Evaluation Metrics:
+-------------------
+- Confusion Matrix
+- Classification Report (precision, recall, F1 per class)
+- Accuracy Score
+- Weighted Precision
+- Weighted Recall
+- Weighted F1 Score
+- Weighted ROC-AUC (one-vs-rest, multiclass)
+
+Results were collected into a comparison DataFrame (model_perfs) sorted by accuracy.
+
+Prediction Function:
+--------------------
+A predict() function was created that accepts raw text input (as a list) and
+uses the trained XGBoost pipeline (xgb_pipeline) by default to predict the
+ticket category. The pipeline handles TF-IDF transformation internally, so
+raw text can be passed directly.
+
+Key Libraries Used:
+-------------------
+- pandas, numpy (data manipulation)
+- matplotlib, seaborn (visualization)
+- scikit-learn (ML pipeline, models, metrics, preprocessing)
+- xgboost (XGBClassifier)
+- nltk (stopwords, lemmatization)
+- symspellpy (spelling correction)
+- yellowbrick (classifier visualization utilities)
+- sklearnex (Intel extension for scikit-learn acceleration)
+
+Issues Encountered & Fixes:
+----------------------------
+1. class_weight_dict mismatch:
+   - Problem: class_weight_dict was originally computed using df.topic (encoded
+     integers 0-7), but the target variable y was set to df['Topic_group']
+     (original string labels). This caused a ValueError because the model
+     couldn't find string class names in the integer-keyed weight dictionary.
+   - Fix: Changed class_weight_dict computation to use df['Topic_group'] so
+     that dictionary keys match the actual class labels the model sees.
+   - Later update: y was changed to df['topic'] (encoded), aligning both
+     class weights and target to use the same integer encoding.
+

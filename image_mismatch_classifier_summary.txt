@@ -1,0 +1,123 @@
+Image-Text Mismatch Classifier - Problem Summary
+=======================================================
+
+Objective:
+----------
+Classify whether an image and its paired text description actually match or
+not. Given a dataset where each row has a text description and an associated
+image (URL), detect mismatches — cases where the image does not correspond
+to the description provided.
+
+Dataset:
+--------
+- Source: Image_Mismatch_data.csv (based on Google Conceptual Captions)
+- Total valid rows: 14 image-text pairs (sampled from 734K+ rows)
+- Text column: "Text" (natural language descriptions)
+- Image column: "Image" (URLs pointing to images hosted online)
+- Note: Some image URLs are expired/broken (4 out of 14 failed to load)
+
+Approach — 2-Step Pipeline:
+---------------------------
+Unlike a direct image-to-text similarity approach (e.g., CLIP softmax),
+this project uses a more interpretable 2-step method:
+
+Step 1 — Image Captioning (BLIP):
+  - Each image is fed into the BLIP model
+  - BLIP generates a text caption describing what the image actually shows
+  - Example: Image of a robot → BLIP outputs "a robot arm on a white background"
+
+Step 2 — Text Similarity (Sentence-Transformers):
+  - The BLIP-generated caption is compared against the original description
+  - Cosine similarity is computed between their sentence embeddings
+  - High similarity → Match, Low similarity → Mismatch
+
+Why This Approach Over Direct CLIP Scoring:
+  - CLIP softmax on a single image-text pair always returns 1.0 (useless)
+  - BLIP captioning lets you SEE what the model thinks the image contains
+  - Text-to-text comparison is more reliable and interpretable
+  - Mismatches become visually obvious in the results table
+
+Models Used:
+------------
+1. BLIP (Salesforce/blip-image-captioning-base)
+   - Purpose: Image captioning — generates text description from image
+   - Type: Vision-Language model (ViT encoder + text decoder)
+   - Size: ~990MB
+   - Source: Hugging Face (open-source, no API key needed)
+   - Runs locally on CPU/GPU
+
+2. Sentence-Transformer (all-MiniLM-L6-v2)
+   - Purpose: Compute cosine similarity between two text sentences
+   - Type: BERT-based sentence embedding model
+   - Size: ~80MB
+   - Produces 384-dimensional sentence embeddings
+   - Source: Hugging Face / sentence-transformers library
+
+Classification Logic:
+---------------------
+- Similarity threshold: 0.25 (configurable)
+- If cosine_similarity(original_text, blip_caption) >= 0.25 → Match
+- If cosine_similarity(original_text, blip_caption) <  0.25 → Mismatch
+- If image fails to load → Error (skipped)
+
+Image Loading:
+--------------
+- Images are loaded from URLs using the requests library
+- Supports both HTTP/HTTPS URLs and local file paths
+- Timeout: 10 seconds per image
+- Format: Converted to RGB via PIL
+- Failed loads are logged and marked as "Error"
+
+Outputs & Visualizations:
+-------------------------
+1. Results Table:
+   - Shows: Row Index | Original Description | BLIP Generated Caption |
+            Similarity Score | Classification (Match/Mismatch/Error)
+   - Color-coded: Green = Match, Red = Mismatch, Yellow = Error
+   - Uses pandas Styler with jinja2 for HTML rendering
+
+2. Visual Inspection Grid:
+   - Displays each image with its original text vs BLIP caption
+   - Color-coded titles (green for match, red for mismatch)
+   - 3-column grid layout using matplotlib
+
+3. Score Distribution Bar Chart:
+   - Bar chart of similarity scores per row
+   - Green bars = Match, Red bars = Mismatch
+   - Blue dashed line shows the threshold
+
+4. Export:
+   - Results saved to: image_text_mismatch_results.csv
+   - Includes: row_index, original_text, generated_caption, image_source,
+     similarity_score, classification
+
+Key Libraries Used:
+-------------------
+- torch / PyTorch (deep learning framework, model inference)
+- transformers (Hugging Face — BLIP model loading and inference)
+- sentence-transformers (sentence embeddings and cosine similarity)
+- pandas (data loading and manipulation)
+- numpy (numerical operations)
+- PIL / Pillow (image loading and processing)
+- matplotlib (visualizations — grid plots, bar charts)
+- seaborn (heatmap for cross-match matrix — optional)
+- requests (downloading images from URLs)
+- jinja2 (required by pandas Styler for colored HTML tables)
+- openpyxl (Excel file support)
+
+Issues Encountered & Fixes:
+----------------------------
+1. CLIP softmax always returning 1.0:
+   - Problem: When computing CLIP similarity with a single image-text pair,
+     softmax(dim=1) on a 1x1 tensor always returns 1.0, making all pairs
+     show as "Match" regardless of actual content.
+   - Fix: Replaced the entire CLIP approach with BLIP captioning +
+     sentence similarity, which gives meaningful scores per pair.
+
+
+2. Expired/broken image URLs:
+   - Problem: Several URLs in the GCC dataset return 400/404 errors or
+     connection timeouts (dataset is several years old)
+   - Fix: Wrapped image loading in try/except, logged errors, and marked
+     those rows as "Error" (skipped gracefully)
+
